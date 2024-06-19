@@ -58,6 +58,7 @@ let completionBuffer:CompletionItem[] =
 
 connection.onInitialize((params:InitializeParams) => {
 	connection.console.log('starting connection!');
+	
 	let capabilities = params.capabilities;
 	hasConfigurationCapability = !!(
 		capabilities.workspace && !!capabilities.workspace.configuration
@@ -106,11 +107,17 @@ interface ServerSettings {
 const defaultSettings:ServerSettings = {
 	connectionType : "sockets",
 	serverIp : "127.0.0.1",
-	serverPort : 1338
+	serverPort : process.env.TD_COMPLETESME_PORT ? parseInt( process.env.TD_COMPLETESME_PORT ) : 53574
 };
+
 
 let globalSettings:ServerSettings = defaultSettings;
 let documentSettings: Map<string, Thenable<ServerSettings>> = new Map();
+
+
+function endpoint() {
+	return `http://${globalSettings.serverIp}:${globalSettings.serverPort}`
+}
 
 connection.onDidChangeConfiguration(change => {
 	if(hasConfigurationCapability) {
@@ -125,7 +132,7 @@ connection.onDidChangeConfiguration(change => {
 
 export async function requestCompletionsFromTd(document_name:string, line:string)  {
 	console.log('getting a completion');
-	let results  = axios.post('http://localhost:1338', JSON.stringify({document_name,line})).then(
+	let results  = axios.post(endpoint(), JSON.stringify({document_name,line})).then(
 		(res) => {
 			return res;
 		});
@@ -155,24 +162,9 @@ connection.onCompletion(async (_position : TextDocumentPositionParams) : Promise
 		detail : string;
 		documentation: string;
 	}
-		results = await axios.post('http://localhost:1338', JSON.stringify({current_document , lines,line_idx, char})+ "\n").then(
+		results = await axios.post(endpoint(), JSON.stringify({current_document , lines,line_idx, char})+ "\n").then(
 		(res) => {
-			let splits = res.data.split("\n\r\n\r")
-			if(splits.length > 1) {
-
-				let res_data = JSON.parse(splits[1]);
-				console.log(res_data)
-				let data_index = 0;
-				let completion_data = res_data.map((result:ResData) => {
-					return {label : result.label, 
-						kind:result.kind, 
-						documentation:result.documentation, 
-						detail : result.detail}});
-				
-				return completion_data;
-			} else {
-				return [];
-			}
+				return res.data;
 		}).catch( (err) => {
 			console.log(err);
 			return [];
